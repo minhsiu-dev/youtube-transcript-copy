@@ -2,7 +2,9 @@ import type { CaptionTrack, FormatChoice, VideoMeta, TabState } from '../lib/typ
 import type { Message } from '../lib/messages.js';
 
 const langSelect = document.getElementById('lang') as HTMLSelectElement;
-const status = document.getElementById('status') as HTMLDivElement;
+const statusEl = document.getElementById('status') as HTMLDivElement;
+const statusText = document.getElementById('status-text') as HTMLSpanElement;
+const statusSpinner = document.getElementById('status-spinner') as unknown as SVGElement;
 const btnPlain = document.getElementById('btn-plain') as HTMLButtonElement;
 const btnTimestamped = document.getElementById('btn-timestamped') as HTMLButtonElement;
 const btnHeader = document.getElementById('btn-header') as HTMLButtonElement;
@@ -10,10 +12,16 @@ const btnHeader = document.getElementById('btn-header') as HTMLButtonElement;
 let activeTabId: number | null = null;
 
 function setStatus(text: string, kind: 'success' | 'error' | 'info' = 'info'): void {
-  status.textContent = text;
-  status.classList.remove('success', 'error');
-  if (kind === 'success') status.classList.add('success');
-  if (kind === 'error') status.classList.add('error');
+  statusText.textContent = text;
+  statusEl.classList.remove('text-muted-foreground', 'text-success', 'text-destructive');
+  if (kind === 'success') statusEl.classList.add('text-success');
+  else if (kind === 'error') statusEl.classList.add('text-destructive');
+  else statusEl.classList.add('text-muted-foreground');
+
+  // Spinner is shown only for non-empty 'info' status (e.g. 'Fetching…',
+  // 'Waiting for ad to end…'). Hidden on success, error, and empty status.
+  const showSpinner = kind === 'info' && text.length > 0;
+  statusSpinner.classList.toggle('hidden', !showSpinner);
 }
 
 function setButtonsEnabled(enabled: boolean): void {
