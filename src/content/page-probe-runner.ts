@@ -4,6 +4,7 @@
 
 import {
   PROBE_MESSAGE_TAG,
+  PROBE_REQUEST_EVENT,
   type ProbeMessage,
   type ProbeOk,
   type ProbeResult,
@@ -26,7 +27,10 @@ function buildProbeResult(): ProbeResult {
   const rawTracks = r.captions?.playerCaptionsTracklistRenderer?.captionTracks;
   const captionTracks: CaptionTrackOut[] = Array.isArray(rawTracks)
     ? rawTracks
-        .filter((t: { baseUrl?: unknown }) => typeof t.baseUrl === 'string')
+        .filter(
+          (t: { baseUrl?: unknown; languageCode?: unknown }) =>
+            typeof t.baseUrl === 'string' && typeof t.languageCode === 'string',
+        )
         .map(
           (t: {
             languageCode: string;
@@ -71,5 +75,12 @@ postProbe();
 
 // SPA navigation: YouTube fires yt-navigate-finish when an in-app nav completes.
 document.addEventListener('yt-navigate-finish', () => {
+  postProbe();
+});
+
+// Handshake: the ISOLATED-world content script may register its window.message
+// listener AFTER our initial postProbe() (document_end vs document_idle race).
+// On hearing this request event, re-emit the current probe result.
+document.addEventListener(PROBE_REQUEST_EVENT, () => {
   postProbe();
 });

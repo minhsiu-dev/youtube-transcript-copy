@@ -19,7 +19,7 @@ export interface ProbeOk {
 
 export interface ProbeFail {
   ok: false;
-  reason: string;
+  reason: 'no-player-response' | 'no-video-id';
 }
 
 export type ProbeResult = ProbeOk | ProbeFail;
@@ -29,3 +29,9 @@ export interface ProbeMessage {
   type: 'PROBE_RESULT';
   result: ProbeResult;
 }
+
+// Event Task 6 (ISOLATED-world script) dispatches on document after
+// registering its window.message listener, asking the MAIN-world probe
+// to re-fire its initial result. This eliminates the document_end vs
+// document_idle ordering race on cold page load.
+export const PROBE_REQUEST_EVENT = '__yt_transcript_copier_request_probe__' as const;
