@@ -8,6 +8,7 @@ import {
   parseTimedTextXml,
   fetchCaptionTrack,
   buildTranscriptUrl,
+  EmptyTranscriptError,
 } from '../src/content/transcript-fetcher.js';
 
 // jsdom's test env doesn't expose Node's Response global; build a minimal
@@ -149,12 +150,12 @@ describe('fetchCaptionTrack', () => {
     ).rejects.toThrow(/404/);
   });
 
-  it('throws an enable-CC error when the response body is empty', async () => {
+  it('throws EmptyTranscriptError when the response body is empty (no pot)', async () => {
     globalThis.fetch = async () => mockResponse('');
 
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
-    ).rejects.toThrow(/enable CC/i);
+    ).rejects.toBeInstanceOf(EmptyTranscriptError);
   });
 
   it('throws HTTP error even when potParams is provided', async () => {
@@ -216,7 +217,7 @@ describe('fetchCaptionTrack', () => {
     expect(segments).toHaveLength(3);
   });
 
-  it('throws with an enable-CC hint when both attempts return empty', async () => {
+  it('throws EmptyTranscriptError when both pot and no-pot attempts return empty', async () => {
     globalThis.fetch = async () => mockResponse('');
 
     await expect(
@@ -224,6 +225,6 @@ describe('fetchCaptionTrack', () => {
         'https://www.youtube.com/api/timedtext?v=abc&lang=en',
         { pot: 'POT_VALUE', c: 'WEB' },
       ),
-    ).rejects.toThrow(/enable CC/i);
+    ).rejects.toBeInstanceOf(EmptyTranscriptError);
   });
 });
