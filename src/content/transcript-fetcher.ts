@@ -42,8 +42,22 @@ function decodeHtmlEntities(text: string): string {
   return ta.value;
 }
 
-export async function fetchCaptionTrack(baseUrl: string): Promise<Segment[]> {
-  const url = buildTranscriptUrl(baseUrl);
+export interface PotParams {
+  pot: string;
+  c: string;
+}
+
+export async function fetchCaptionTrack(
+  baseUrl: string,
+  potParams?: PotParams,
+): Promise<Segment[]> {
+  let url = buildTranscriptUrl(baseUrl);
+  if (potParams) {
+    const u = new URL(url);
+    u.searchParams.set('pot', potParams.pot);
+    u.searchParams.set('c', potParams.c);
+    url = u.toString();
+  }
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -52,8 +66,13 @@ export async function fetchCaptionTrack(baseUrl: string): Promise<Segment[]> {
   }
   const body = await response.text();
   if (body.trim() === '') {
+    if (potParams) {
+      // pot likely rejected — try once without it; some older / ASR-only
+      // tracks serve without pot.
+      return fetchCaptionTrack(baseUrl);
+    }
     throw new Error(
-      `Caption fetch returned empty body (status ${response.status}). The caption URL may have expired — reload the YouTube page and try again.`,
+      `Couldn't load captions — please enable CC on this video and try again (status ${response.status}, empty body).`,
     );
   }
   const segments = parseTimedTextXml(body);

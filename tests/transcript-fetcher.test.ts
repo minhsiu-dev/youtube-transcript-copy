@@ -165,4 +165,54 @@ describe('fetchCaptionTrack', () => {
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
     ).rejects.toThrow(/no parseable segments/);
   });
+
+  it('appends pot and c when potParams is provided', async () => {
+    let receivedUrl = '';
+    globalThis.fetch = async (url) => {
+      receivedUrl = url as string;
+      return mockResponse(FIXTURE_XML);
+    };
+
+    await fetchCaptionTrack(
+      'https://www.youtube.com/api/timedtext?v=abc&lang=en&fmt=json3',
+      { pot: 'POT_VALUE', c: 'WEB' },
+    );
+
+    const u = new URL(receivedUrl);
+    expect(u.searchParams.get('pot')).toBe('POT_VALUE');
+    expect(u.searchParams.get('c')).toBe('WEB');
+    expect(u.searchParams.get('fmt')).toBeNull();
+  });
+
+  it('retries without pot when a pot-supplied fetch returns empty', async () => {
+    const urls: string[] = [];
+    let callCount = 0;
+    globalThis.fetch = async (url) => {
+      urls.push(url as string);
+      callCount++;
+      if (callCount === 1) return mockResponse('');
+      return mockResponse(FIXTURE_XML);
+    };
+
+    const segments = await fetchCaptionTrack(
+      'https://www.youtube.com/api/timedtext?v=abc&lang=en',
+      { pot: 'POT_VALUE', c: 'WEB' },
+    );
+
+    expect(callCount).toBe(2);
+    expect(new URL(urls[0]!).searchParams.get('pot')).toBe('POT_VALUE');
+    expect(new URL(urls[1]!).searchParams.get('pot')).toBeNull();
+    expect(segments).toHaveLength(3);
+  });
+
+  it('throws with an enable-CC hint when both attempts return empty', async () => {
+    globalThis.fetch = async () => mockResponse('');
+
+    await expect(
+      fetchCaptionTrack(
+        'https://www.youtube.com/api/timedtext?v=abc&lang=en',
+        { pot: 'POT_VALUE', c: 'WEB' },
+      ),
+    ).rejects.toThrow(/enable CC/i);
+  });
 });
