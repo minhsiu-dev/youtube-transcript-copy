@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Copy Transcript</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Copy transcript</h1>
+
+    <div class="row">
+      <label for="lang">Language</label>
+      <select id="lang"></select>
+    </div>
+
+    <div class="buttons">
+      <button id="btn-plain" type="button">Plain text</button>
+      <button id="btn-timestamped" type="button">With timestamps</button>
+      <button id="btn-header" type="button">Plain + title/URL</button>
+    </div>
+
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
