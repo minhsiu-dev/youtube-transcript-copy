@@ -11,17 +11,20 @@ const btnHeader = document.getElementById('btn-header') as HTMLButtonElement;
 
 let activeTabId: number | null = null;
 
-function setStatus(text: string, kind: 'success' | 'error' | 'info' = 'info'): void {
+function setStatus(
+  text: string,
+  kind: 'success' | 'error' | 'info' | 'loading' = 'info',
+): void {
   statusText.textContent = text;
   statusEl.classList.remove('text-muted-foreground', 'text-success', 'text-destructive');
   if (kind === 'success') statusEl.classList.add('text-success');
   else if (kind === 'error') statusEl.classList.add('text-destructive');
   else statusEl.classList.add('text-muted-foreground');
 
-  // Spinner is shown only for non-empty 'info' status (e.g. 'Fetching…',
-  // 'Waiting for ad to end…'). Hidden on success, error, and empty status.
-  const showSpinner = kind === 'info' && text.length > 0;
-  statusSpinner.classList.toggle('hidden', !showSpinner);
+  // Spinner is shown only for the 'loading' kind (e.g. 'Fetching…',
+  // 'Waiting for ad to end…'). Hidden on info (terminal messages),
+  // success, error, and empty status.
+  statusSpinner.classList.toggle('hidden', kind !== 'loading');
 }
 
 function setButtonsEnabled(enabled: boolean): void {
@@ -107,7 +110,7 @@ async function init(): Promise<void> {
 
 async function copyWithFormat(format: FormatChoice): Promise<void> {
   setButtonsEnabled(false);
-  setStatus('Fetching…', 'info');
+  setStatus('Fetching…', 'loading');
   if (activeTabId === null) {
     setStatus('No active tab.', 'error');
     setButtonsEnabled(true);
@@ -154,7 +157,7 @@ btnHeader.addEventListener('click', () => void copyWithFormat('header'));
 // window closes.
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'STATUS_UPDATE') {
-    setStatus(msg.text, 'info');
+    setStatus(msg.text, 'loading');
   }
 });
 
