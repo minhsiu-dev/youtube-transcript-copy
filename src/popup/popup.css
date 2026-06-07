@@ -1,82 +1,91 @@
-* {
-  box-sizing: border-box;
+@import "tailwindcss";
+
+@source "./popup.html";
+@source "./popup.ts";
+
+/* shadcn HSL tokens, exposed to Tailwind utilities via @theme. Each
+   utility (e.g. `bg-background`) resolves through `hsl(var(--background))`,
+   so swapping the CSS variables under @media (prefers-color-scheme: dark)
+   automatically dark-modes every utility — no `dark:` variant needed. */
+@theme {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-success: hsl(var(--success));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
 }
 
-body {
-  margin: 0;
-  padding: 14px 16px 12px;
-  width: 280px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 13px;
-  color: #1f1f1f;
-  background: #fff;
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 0 0% 96%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84% 60%;
+    --success: 142 71% 45%;
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 9%;
+    --radius: 0.5rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 0 0% 7%;
+      --foreground: 0 0% 98%;
+      --primary: 0 0% 98%;
+      --primary-foreground: 0 0% 9%;
+      --secondary: 0 0% 15%;
+      --secondary-foreground: 0 0% 98%;
+      --muted: 0 0% 15%;
+      --muted-foreground: 0 0% 64%;
+      --accent: 0 0% 15%;
+      --accent-foreground: 0 0% 98%;
+      --destructive: 0 63% 50%;
+      --success: 142 65% 50%;
+      --border: 0 0% 18%;
+      --input: 0 0% 18%;
+      --ring: 0 0% 83%;
+    }
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
 }
 
-h1 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
+@utility btn-primary {
+  @apply inline-flex h-9 w-full items-center justify-start gap-2 rounded-md px-3 text-sm font-medium
+         bg-primary text-primary-foreground transition-colors
+         hover:bg-primary/90
+         focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background
+         disabled:pointer-events-none disabled:opacity-50;
 }
 
-.row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.row label {
-  flex: 0 0 64px;
-  color: #555;
-}
-
-.row select {
-  flex: 1;
-  padding: 5px 6px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  font: inherit;
-}
-
-.buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.buttons button {
-  padding: 8px 10px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  background: #f6f6f6;
-  color: #1f1f1f;
-  font: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.buttons button:hover:not(:disabled) {
-  background: #ececec;
-}
-
-.buttons button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.status {
-  margin-top: 12px;
-  min-height: 1.2em;
-  font-size: 12px;
-  color: #666;
-}
-
-.status.success {
-  color: #008a3c;
-}
-
-.status.error {
-  color: #c0392b;
+@utility btn-secondary {
+  @apply inline-flex h-9 w-full items-center justify-start gap-2 rounded-md px-3 text-sm font-medium
+         border border-input bg-background transition-colors
+         hover:bg-accent hover:text-accent-foreground
+         focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1 focus:ring-offset-background
+         disabled:pointer-events-none disabled:opacity-50;
 }
