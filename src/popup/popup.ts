@@ -7,6 +7,8 @@ const btnPlain = document.getElementById('btn-plain') as HTMLButtonElement;
 const btnTimestamped = document.getElementById('btn-timestamped') as HTMLButtonElement;
 const btnHeader = document.getElementById('btn-header') as HTMLButtonElement;
 
+let activeTabId: number | null = null;
+
 function setStatus(text: string, kind: 'success' | 'error' | 'info' = 'info'): void {
   status.textContent = text;
   status.classList.remove('success', 'error');
@@ -43,15 +45,15 @@ function pickDefaultIndex(tracks: CaptionTrack[]): number {
 
 async function init(): Promise<void> {
   setButtonsEnabled(false);
-  const tabId = await getActiveTabId();
-  if (tabId === null) {
+  activeTabId = await getActiveTabId();
+  if (activeTabId === null) {
     setStatus('No active tab.', 'error');
     return;
   }
 
   let reply: GetTracksReply | undefined;
   try {
-    reply = await ask<GetTracksReply>(tabId, { type: 'GET_TRACKS' });
+    reply = await ask<GetTracksReply>(activeTabId, { type: 'GET_TRACKS' });
   } catch {
     setStatus('Open a YouTube video to use this.', 'info');
     return;
@@ -67,7 +69,7 @@ async function init(): Promise<void> {
   }
 
   // Populate language dropdown.
-  langSelect.innerHTML = '';
+  langSelect.replaceChildren();
   reply.tracks.forEach((t) => {
     const opt = document.createElement('option');
     opt.value = t.languageCode;
@@ -83,8 +85,7 @@ async function init(): Promise<void> {
 async function copyWithFormat(format: FormatChoice): Promise<void> {
   setButtonsEnabled(false);
   setStatus('Fetching…', 'info');
-  const tabId = await getActiveTabId();
-  if (tabId === null) {
+  if (activeTabId === null) {
     setStatus('No active tab.', 'error');
     setButtonsEnabled(true);
     return;
@@ -93,7 +94,7 @@ async function copyWithFormat(format: FormatChoice): Promise<void> {
     const reply = (await ask<
       | { type: 'FETCH_AND_FORMAT_REPLY'; text: string }
       | { type: 'ERROR'; reason: string }
-    >(tabId, {
+    >(activeTabId, {
       type: 'FETCH_AND_FORMAT',
       languageCode: langSelect.value,
       format,

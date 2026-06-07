@@ -9,7 +9,9 @@ export function formatTimestamped(segments: Segment[]): string {
 }
 
 export function formatWithHeader(segments: Segment[], meta: VideoMeta): string {
-  return `${meta.title}\n${meta.url}\n\n${formatPlain(segments)}`;
+  const safeTitle = meta.title.replace(/\r?\n/g, ' ');
+  const safeUrl = meta.url.replace(/\r?\n/g, '');
+  return `${safeTitle}\n${safeUrl}\n\n${formatPlain(segments)}`;
 }
 
 function formatTimestamp(seconds: number): string {

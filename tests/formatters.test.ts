@@ -78,4 +78,17 @@ describe('formatWithHeader', () => {
       'Test Video\nhttps://www.youtube.com/watch?v=abc123\n\n',
     );
   });
+
+  it('replaces embedded newlines in title and url with single spaces', () => {
+    expect(
+      formatWithHeader(
+        [{ start: 0, duration: 1, text: 'Body.' }],
+        {
+          videoId: 'abc123',
+          title: 'My\nMultiline\nTitle',
+          url: 'https://example.com/\nbad',
+        },
+      ),
+    ).toBe('My Multiline Title\nhttps://example.com/bad\n\nBody.');
+  });
 });
