@@ -116,8 +116,14 @@ Use this before tagging a release.
   ad's videoId is on screen. The user sees the original
   "Couldn't load captions — please enable CC on this video and try again."
   error and can retry by clicking the icon and Plain-text again after the
-  second ad ends. Single-ad and ad-then-video transitions are handled
-  correctly.
+  second ad ends.
+- **Ad ends during the speculative fetch:** if the ad ends in the brief window
+  between when the extension sends the Step 1 request and when the server
+  responds (typically under 1 s), the extension surfaces the
+  "Couldn't load captions — please enable CC on this video and try again."
+  error rather than transparently falling back to Step 2. A second click
+  immediately after the ad ends will succeed. (Fixing this requires a
+  retry-without-ad check in the outer catch; tracked for v2.)
 
 ## License
 
