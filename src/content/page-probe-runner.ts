@@ -73,14 +73,24 @@ function postProbe(): void {
 // Initial probe (page loaded directly to /watch).
 postProbe();
 
-// SPA navigation: YouTube fires yt-navigate-finish when an in-app nav completes.
+// SPA navigation events. YouTube fires several events during in-app nav and
+// each one happens at a different stage of the data update lifecycle:
+//   yt-navigate-finish    — DOM updated, but ytInitialPlayerResponse may not
+//                            yet reflect the new video
+//   yt-page-data-updated  — page data (incl. ytInitialPlayerResponse) updated
+// Listening to both increases the chance we re-probe AFTER the global has
+// been refreshed. The ISOLATED-world script rejects probes whose videoId
+// doesn't match the URL, so a probe that fires too early is harmless.
 document.addEventListener('yt-navigate-finish', () => {
+  postProbe();
+});
+document.addEventListener('yt-page-data-updated', () => {
   postProbe();
 });
 
 // Handshake: the ISOLATED-world content script may register its window.message
-// listener AFTER our initial postProbe() (document_end vs document_idle race).
-// On hearing this request event, re-emit the current probe result.
+// listener AFTER our initial postProbe() (document_end vs document_idle race),
+// or may dispatch this event later when it detects a stale cache. Re-probe.
 document.addEventListener(PROBE_REQUEST_EVENT, () => {
   postProbe();
 });
