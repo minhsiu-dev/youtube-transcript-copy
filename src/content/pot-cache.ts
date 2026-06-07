@@ -85,6 +85,38 @@ function scanResourceTimings(videoId: string): PotCapture | null {
   return null;
 }
 
+// Relaxed variant of scanResourceTimings: returns the most-recent timedtext
+// entry's pot+c without filtering by videoId. Used only by the content-script
+// FETCH_AND_FORMAT handler during an ad, as a speculative fast path: when an
+// ad is playing, YouTube's own timedtext fetches carry the ad's videoId, so
+// the strict scan rejects them. The relaxed scan accepts whatever's there
+// and lets the caller try it — if the server rejects (empty body), the caller
+// falls back to waiting for the ad to end and running the strict path.
+//
+// IMPORTANT: callers MUST NOT write the result of this function to potCache.
+// The pot is likely bound to the entry's videoId, not the caller's; caching
+// it under the caller's videoId would poison subsequent strict-path lookups.
+export function scanAnyPot(): PotCapture | null {
+  const entries = performance.getEntriesByType('resource');
+  for (let i = entries.length - 1; i >= 0; i--) {
+    const entry = entries[i];
+    if (!entry) continue;
+    const name = entry.name;
+    if (!name.startsWith(TIMEDTEXT_PREFIX)) continue;
+    let url: URL;
+    try {
+      url = new URL(name);
+    } catch {
+      continue;
+    }
+    const pot = url.searchParams.get('pot');
+    const c = url.searchParams.get('c');
+    if (!pot || !c) continue;
+    return { pot, c };
+  }
+  return null;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
