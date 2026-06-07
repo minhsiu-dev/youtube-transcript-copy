@@ -23,6 +23,7 @@ function stubResourceEntries(entries: PerformanceEntry[]) {
 }
 
 beforeEach(() => {
+  jest.restoreAllMocks();
   _resetForTest();
   document.body.innerHTML = '';
   // jsdom does not implement the Resource Timing API; install no-op stubs so
@@ -33,7 +34,6 @@ beforeEach(() => {
   if (typeof performance.clearResourceTimings !== 'function') {
     (performance as unknown as Record<string, unknown>).clearResourceTimings = () => undefined;
   }
-  jest.restoreAllMocks();
 });
 
 function installCcButton(): HTMLButtonElement {

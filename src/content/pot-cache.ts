@@ -37,6 +37,9 @@ const CC_BUTTON_SELECTORS = [
   '.ytp-subtitles-button',
 ];
 
+// Single-slot cache by design: when the user navigates SPA-style to a new
+// video, the previous video's entry is naturally invalidated by the
+// videoId-equality check in readFreshCache. We don't need a Map.
 let potCache: PotCacheEntry | null = null;
 
 function setPotCache(entry: PotCacheEntry): void {
@@ -102,6 +105,12 @@ export async function ensurePot(videoId: string): Promise<PotCapture | null> {
   const button = findCcButton();
   if (!button) return null;
 
+  // Match the click pattern of a known working third-party extension:
+  // clear the resource-timings buffer, then click the CC button twice
+  // synchronously (toggle on → toggle off). YouTube's click handler runs
+  // synchronously on each click; the first click triggers the caption
+  // fetch, the second restores the user's CC-off state. Inserting a delay
+  // between the clicks was not part of the validated pattern.
   performance.clearResourceTimings();
   button.click();
   button.click();
