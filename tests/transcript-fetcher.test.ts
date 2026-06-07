@@ -149,12 +149,23 @@ describe('fetchCaptionTrack', () => {
     ).rejects.toThrow(/404/);
   });
 
-  it('throws a clear error when the response body is empty', async () => {
+  it('throws an enable-CC error when the response body is empty', async () => {
     globalThis.fetch = async () => mockResponse('');
 
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
-    ).rejects.toThrow(/empty body/);
+    ).rejects.toThrow(/enable CC/i);
+  });
+
+  it('throws HTTP error even when potParams is provided', async () => {
+    globalThis.fetch = async () =>
+      mockResponse('forbidden', { status: 403, statusText: 'Forbidden' });
+    await expect(
+      fetchCaptionTrack(
+        'https://www.youtube.com/api/timedtext?v=abc',
+        { pot: 'P', c: 'WEB' },
+      ),
+    ).rejects.toThrow(/403/);
   });
 
   it('throws when the response has no parseable segments', async () => {
