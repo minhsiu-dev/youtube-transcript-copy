@@ -57,12 +57,24 @@ async function init(): Promise<void> {
   let reply: GetTracksReply | undefined;
   try {
     reply = await ask<GetTracksReply>(activeTabId, { type: 'GET_TRACKS' });
-  } catch {
-    setStatus('Open a YouTube video to use this.', 'info');
+  } catch (err) {
+    // chrome.tabs.sendMessage rejects when the content-script isn't loaded
+    // on this tab. Most often: extension was rebuilt but the tab wasn't
+    // refreshed, or the content-script crashed at startup.
+    console.error('[yt-transcript-copier] GET_TRACKS failed:', err);
+    setStatus(
+      'Extension can\'t reach this page. Reload the YouTube tab and try again.',
+      'error',
+    );
     return;
   }
 
-  if (!reply || reply.state === 'not-youtube') {
+  if (!reply) {
+    console.error('[yt-transcript-copier] GET_TRACKS returned no reply');
+    setStatus('No response from page. Reload the YouTube tab.', 'error');
+    return;
+  }
+  if (reply.state === 'not-youtube') {
     setStatus('Open a YouTube video to use this.', 'info');
     return;
   }
