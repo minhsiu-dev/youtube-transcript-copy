@@ -22,6 +22,13 @@ describe('parseJson3', () => {
     expect(result).toEqual([]);
   });
 
+  it('defaults start and duration to 0 when timing fields are absent', () => {
+    const result = parseJson3({
+      events: [{ segs: [{ utf8: 'No timing' }] }],
+    });
+    expect(result).toEqual([{ start: 0, duration: 0, text: 'No timing' }]);
+  });
+
   it('skips events with only whitespace text', () => {
     const result = parseJson3({
       events: [
