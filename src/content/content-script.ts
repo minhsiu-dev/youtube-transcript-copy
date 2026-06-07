@@ -11,6 +11,7 @@ import {
   formatTimestamped,
   formatWithHeader,
 } from '../lib/formatters.js';
+import { ensurePot } from './pot-cache.js';
 
 interface CachedPageData {
   tracks: CaptionTrack[];
@@ -117,7 +118,10 @@ chrome.runtime.onMessage.addListener(
         }
         const metaSnapshot = cache.meta;
         try {
-          const segments = await fetchCaptionTrack(track.baseUrl);
+          const potParams = metaSnapshot
+            ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
+            : undefined;
+          const segments = await fetchCaptionTrack(track.baseUrl, potParams);
           const text = applyFormat(msg.format, segments, metaSnapshot);
           sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
         } catch (err) {
