@@ -35,14 +35,38 @@ export function parseJson3(payload: unknown): Segment[] {
   return out;
 }
 
+export function buildJson3Url(baseUrl: string): string {
+  try {
+    const u = new URL(baseUrl);
+    u.searchParams.set('fmt', 'json3');
+    return u.toString();
+  } catch {
+    return baseUrl.includes('fmt=json3') ? baseUrl : `${baseUrl}&fmt=json3`;
+  }
+}
+
 export async function fetchCaptionTrack(baseUrl: string): Promise<Segment[]> {
-  const url = baseUrl.includes('fmt=json3') ? baseUrl : `${baseUrl}&fmt=json3`;
+  const url = buildJson3Url(baseUrl);
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
       `Caption fetch failed: ${response.status} ${response.statusText}`,
     );
   }
-  const payload = (await response.json()) as unknown;
+  const body = await response.text();
+  if (body.trim() === '') {
+    throw new Error(
+      `Caption fetch returned empty body (status ${response.status}). The caption URL may have expired — reload the YouTube page and try again.`,
+    );
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    const preview = body.slice(0, 80).replace(/\s+/g, ' ');
+    throw new Error(
+      `Caption response was not JSON. Got: ${preview}${body.length > 80 ? '…' : ''}`,
+    );
+  }
   return parseJson3(payload);
 }

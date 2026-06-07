@@ -71,7 +71,7 @@ describe('fetchCaptionTrack', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('appends &fmt=json3 when missing and returns parsed Segments', async () => {
+  it('sets fmt=json3 when missing and returns parsed Segments', async () => {
     let receivedUrl = '';
     globalThis.fetch = async (url) => {
       receivedUrl = url as string;
@@ -91,7 +91,7 @@ describe('fetchCaptionTrack', () => {
     expect(segments[0]?.text).toBe('Hello world.');
   });
 
-  it('does not append &fmt=json3 if already present', async () => {
+  it('keeps fmt=json3 if already present (no duplicate parameter)', async () => {
     let receivedUrl = '';
     globalThis.fetch = async (url) => {
       receivedUrl = url as string;
@@ -107,6 +107,22 @@ describe('fetchCaptionTrack', () => {
     );
   });
 
+  it('replaces an existing non-json3 fmt parameter', async () => {
+    let receivedUrl = '';
+    globalThis.fetch = async (url) => {
+      receivedUrl = url as string;
+      return new Response(JSON.stringify(FIXTURE));
+    };
+
+    await fetchCaptionTrack(
+      'https://www.youtube.com/api/timedtext?v=abc&fmt=srv3&lang=en',
+    );
+
+    expect(receivedUrl).toBe(
+      'https://www.youtube.com/api/timedtext?v=abc&fmt=json3&lang=en',
+    );
+  });
+
   it('throws a descriptive error on HTTP failure', async () => {
     globalThis.fetch = async () =>
       new Response('not found', { status: 404, statusText: 'Not Found' });
@@ -114,5 +130,24 @@ describe('fetchCaptionTrack', () => {
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
     ).rejects.toThrow(/404/);
+  });
+
+  it('throws a clear error when the response body is empty', async () => {
+    globalThis.fetch = async () => new Response('');
+
+    await expect(
+      fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
+    ).rejects.toThrow(/empty body/);
+  });
+
+  it('throws a clear error when the response body is not JSON', async () => {
+    globalThis.fetch = async () =>
+      new Response('<html><body>nope</body></html>', {
+        headers: { 'Content-Type': 'text/html' },
+      });
+
+    await expect(
+      fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
+    ).rejects.toThrow(/not JSON/);
   });
 });
