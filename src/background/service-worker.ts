@@ -1,6 +1,9 @@
 import type { TabState } from '../lib/types.js';
 import type { Message } from '../lib/messages.js';
 
+// Note: 'no-transcript' and 'not-youtube' intentionally share the same
+// disabled icons — visually they're both "gray/inactive"; the popup text
+// differentiates them.
 const ICONS: Record<TabState, chrome.action.TabIconDetails['path']> = {
   ready: {
     '16': 'icons/icon-16.png',
@@ -22,8 +25,6 @@ const ICONS: Record<TabState, chrome.action.TabIconDetails['path']> = {
   },
 };
 
-const tabState = new Map<number, TabState>();
-
 function applyIcon(tabId: number, state: TabState): void {
   void chrome.action.setIcon({ tabId, path: ICONS[state] });
 }
@@ -33,15 +34,9 @@ chrome.runtime.onMessage.addListener(
     if (msg.type === 'STATE_UPDATE') {
       const tabId = sender.tab?.id;
       if (typeof tabId === 'number') {
-        tabState.set(tabId, msg.state);
         applyIcon(tabId, msg.state);
       }
     }
     return false;
   },
 );
-
-// When a tab closes, drop it from the map.
-chrome.tabs.onRemoved.addListener((tabId) => {
-  tabState.delete(tabId);
-});
