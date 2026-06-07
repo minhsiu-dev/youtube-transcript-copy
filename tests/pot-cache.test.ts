@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { jest, beforeEach, describe, it, expect } from '@jest/globals';
-import { ensurePot, _resetForTest } from '../src/content/pot-cache.js';
+import { ensurePot, scanAnyPot, _resetForTest } from '../src/content/pot-cache.js';
 import type { PerformanceEntry } from 'perf_hooks';
 
 // Build a minimal resource-timings entry. Only `name` (the URL) and `entryType`
@@ -157,5 +157,53 @@ describe('ensurePot', () => {
     // fall through to null.
     const result = await ensurePot('vid_a');
     expect(result).toBeNull();
+  });
+});
+
+describe('scanAnyPot', () => {
+  const TIMEDTEXT_AD =
+    'https://www.youtube.com/api/timedtext?v=ad_vid&pot=AD_POT&c=WEB&lang=en';
+  const TIMEDTEXT_REAL =
+    'https://www.youtube.com/api/timedtext?v=real_vid&pot=REAL_POT&c=WEB&lang=en';
+
+  it('returns null when no resource entries exist', () => {
+    stubResourceEntries([]);
+    expect(scanAnyPot()).toBeNull();
+  });
+
+  it('returns the most-recent timedtext entry regardless of videoId', () => {
+    stubResourceEntries([
+      resourceEntry(TIMEDTEXT_REAL),
+      resourceEntry(TIMEDTEXT_AD),
+    ]);
+    // Most-recent (last in the array) wins; videoId is not checked.
+    expect(scanAnyPot()).toEqual({ pot: 'AD_POT', c: 'WEB' });
+  });
+
+  it('skips entries missing pot', () => {
+    stubResourceEntries([
+      resourceEntry(
+        'https://www.youtube.com/api/timedtext?v=vid&c=WEB&lang=en',
+      ),
+    ]);
+    expect(scanAnyPot()).toBeNull();
+  });
+
+  it('skips entries missing c', () => {
+    stubResourceEntries([
+      resourceEntry(
+        'https://www.youtube.com/api/timedtext?v=vid&pot=X&lang=en',
+      ),
+    ]);
+    expect(scanAnyPot()).toBeNull();
+  });
+
+  it('skips non-timedtext entries even if they have pot+c params', () => {
+    stubResourceEntries([
+      resourceEntry(
+        'https://www.youtube.com/api/something_else?pot=X&c=WEB',
+      ),
+    ]);
+    expect(scanAnyPot()).toBeNull();
   });
 });

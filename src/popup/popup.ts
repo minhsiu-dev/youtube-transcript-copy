@@ -140,4 +140,14 @@ btnPlain.addEventListener('click', () => void copyWithFormat('plain'));
 btnTimestamped.addEventListener('click', () => void copyWithFormat('timestamped'));
 btnHeader.addEventListener('click', () => void copyWithFormat('header'));
 
+// Receive intermediate status updates pushed by the content-script during
+// long-running flows (e.g. "Waiting for ad to end..."). The popup is
+// short-lived — no removeListener needed; the listener is GC'd when the
+// window closes.
+chrome.runtime.onMessage.addListener((msg: Message) => {
+  if (msg.type === 'STATUS_UPDATE') {
+    setStatus(msg.text, 'info');
+  }
+});
+
 void init();

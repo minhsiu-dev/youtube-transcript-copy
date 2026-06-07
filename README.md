@@ -53,6 +53,15 @@ it programmatically clicks YouTube's CC button twice (toggle on, toggle off)
 to trigger a fresh fetch and reads the new URL from the resource-timings
 buffer. The popup then formats the data and writes to the clipboard.
 
+When the popup opens during a pre-roll or mid-roll ad, YouTube's caption
+endpoint returns an empty body for the underlying video (the active player
+is the ad). The extension detects this — a quick speculative fetch with
+whatever `pot` is in the resource-timings buffer, falling back to a
+`MutationObserver` on `#movie_player` that waits up to 60 seconds for the
+`ad-showing` class to drop. During the wait the popup shows
+"Waiting for ad to end…". Once the ad ends, the extension triggers a
+fresh `pot` acquisition for the real video and completes the copy.
+
 See `docs/superpowers/specs/2026-06-07-yt-transcript-copier-design.md` and
 `docs/superpowers/specs/2026-06-07-pot-acquisition-design.md` for the full
 design.
@@ -86,6 +95,35 @@ Use this before tagging a release.
       extension makes includes `pot=...` and `c=WEB`, and the response is
       200 with a non-empty body.
 - [ ] Refresh a video page mid-session. The popup still works correctly.
+- [ ] Open a video with a pre-roll ad (e.g. a popular music video; you may
+      need to clear cookies or use an incognito profile to reliably get an ad).
+      Click the extension icon **during the ad**, then click "Plain text".
+      Popup shows "Fetching…" briefly then "Waiting for ad to end…". Within
+      ~1 second of the ad ending, popup shows "Copied!" and closes. Paste:
+      content is the **real video's** transcript, not the ad's.
+- [ ] Open a video with a pre-roll ad with **CC already on**. Click "Plain text"
+      during the ad. The speculative pot may succeed without waiting (no
+      "Waiting for ad to end…" status); either way the final pasted content
+      is for the real video.
+- [ ] Open a video with no transcript while an ad is playing. Icon stays gray,
+      popup shows "This video has no transcript." (unchanged from the no-ad case).
+
+## Known limitations
+
+- **Back-to-back ads:** if a second ad starts within ~300ms of the first
+  ad ending, the extension still treats the first transition as "ad ended"
+  and tries the strict `pot` path, which then fails because the second
+  ad's videoId is on screen. The user sees the original
+  "Couldn't load captions — please enable CC on this video and try again."
+  error and can retry by clicking the icon and Plain-text again after the
+  second ad ends.
+- **Ad ends during the speculative fetch:** if the ad ends in the brief window
+  between when the extension sends the Step 1 request and when the server
+  responds (typically under 1 s), the extension surfaces the
+  "Couldn't load captions — please enable CC on this video and try again."
+  error rather than transparently falling back to Step 2. A second click
+  immediately after the ad ends will succeed. (Fixing this requires a
+  retry-without-ad check in the outer catch; tracked for v2.)
 
 ## License
 

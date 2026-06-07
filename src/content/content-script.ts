@@ -1,6 +1,9 @@
 import type { CaptionTrack, FormatChoice, TabState, VideoMeta } from '../lib/types.js';
 import type { Message } from '../lib/messages.js';
-import { fetchCaptionTrack } from './transcript-fetcher.js';
+import {
+  fetchCaptionTrack,
+  EmptyTranscriptError,
+} from './transcript-fetcher.js';
 import {
   PROBE_MESSAGE_TAG,
   PROBE_REQUEST_EVENT,
@@ -11,7 +14,8 @@ import {
   formatTimestamped,
   formatWithHeader,
 } from '../lib/formatters.js';
-import { ensurePot } from './pot-cache.js';
+import { ensurePot, scanAnyPot } from './pot-cache.js';
+import { isAdPlaying, waitForAdToEnd } from './ad-state.js';
 
 interface CachedPageData {
   tracks: CaptionTrack[];
@@ -45,6 +49,17 @@ let cache: CachedPageData = { tracks: [], meta: null, state: classifyUrl() };
 
 function sendState(state: TabState): void {
   void chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state });
+}
+
+// Best-effort status push to the popup. The popup may be closed by the
+// time we send (or may never have been open — service worker still listens
+// for STATE_UPDATE but ignores STATUS_UPDATE). chrome.runtime.sendMessage
+// rejects with "Receiving end does not exist" in that case; we swallow it
+// because the fetch flow continues regardless.
+function pushStatus(text: string): void {
+  chrome.runtime.sendMessage({ type: 'STATUS_UPDATE', text }).catch(() => {
+    /* popup not open — ignore */
+  });
 }
 
 // If the cache's videoId doesn't match the current URL's v= param, ask the
@@ -157,18 +172,66 @@ chrome.runtime.onMessage.addListener(
           return;
         }
         const metaSnapshot = cache.meta;
+
         try {
-          const potParams = metaSnapshot
+          // Step 1: speculative fast path during an ad, normal path otherwise.
+          // During an ad, ensurePot's CC click would just trigger captions
+          // for the ad's videoId and the strict scan would reject them, so
+          // we use the relaxed scanAnyPot instead. It may or may not work;
+          // if the server returns an empty body we fall through to Step 2.
+          const adAtStart = isAdPlaying();
+          const initialPot = adAtStart
+            ? (scanAnyPot() ?? undefined)
+            : metaSnapshot
+              ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
+              : undefined;
+
+          try {
+            const segments = await fetchCaptionTrack(track.baseUrl, initialPot);
+            const text = applyFormat(msg.format, segments, metaSnapshot);
+            sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
+            return;
+          } catch (err) {
+            // Only fall back when the error is specifically an empty body
+            // AND there's still an ad on screen. Other errors (HTTP, parse)
+            // bubble out unchanged.
+            if (!(err instanceof EmptyTranscriptError) || !isAdPlaying()) {
+              throw err;
+            }
+          }
+
+          // Step 2: deterministic fallback — wait for the ad to end, then
+          // run the normal strict pot path. waitForAdToEnd resolves true
+          // when #movie_player has been ad-free for >300ms, or false on
+          // timeout.
+          pushStatus('Waiting for ad to end…');
+          const ended = await waitForAdToEnd(60_000);
+          if (!ended) {
+            sendResponse({
+              type: 'ERROR',
+              reason: 'Ad is taking too long — try again after it ends.',
+            });
+            return;
+          }
+
+          const realPot = metaSnapshot
             ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
             : undefined;
-          const segments = await fetchCaptionTrack(track.baseUrl, potParams);
+          const segments = await fetchCaptionTrack(track.baseUrl, realPot);
           const text = applyFormat(msg.format, segments, metaSnapshot);
           sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
         } catch (err) {
-          sendResponse({
-            type: 'ERROR',
-            reason: err instanceof Error ? err.message : String(err),
-          });
+          // EmptyTranscriptError that survives Step 2 (e.g. video genuinely
+          // has no captions, or ad ended into another non-captionable state)
+          // gets the existing user-facing CC hint. Everything else surfaces
+          // the underlying message.
+          const reason =
+            err instanceof EmptyTranscriptError
+              ? "Couldn't load captions — please enable CC on this video and try again."
+              : err instanceof Error
+                ? err.message
+                : String(err);
+          sendResponse({ type: 'ERROR', reason });
         }
       })();
       return true; // keep channel open for async sendResponse

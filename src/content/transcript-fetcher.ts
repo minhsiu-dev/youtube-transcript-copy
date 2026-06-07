@@ -42,6 +42,13 @@ function decodeHtmlEntities(text: string): string {
   return ta.value;
 }
 
+export class EmptyTranscriptError extends Error {
+  constructor() {
+    super('Empty caption response.');
+    this.name = 'EmptyTranscriptError';
+  }
+}
+
 export interface PotParams {
   pot: string;
   c: string;
@@ -71,9 +78,11 @@ export async function fetchCaptionTrack(
       // tracks serve without pot.
       return fetchCaptionTrack(baseUrl);
     }
-    throw new Error(
-      `Couldn't load captions — please enable CC on this video and try again (status ${response.status}, empty body).`,
-    );
+    // The user-facing "enable CC" message is constructed by the caller
+    // (content-script), which can branch on ad-playing state and choose
+    // an appropriate message. Throw a typed sentinel so the caller can
+    // distinguish empty-body from HTTP errors and parse failures.
+    throw new EmptyTranscriptError();
   }
   const segments = parseTimedTextXml(body);
   if (segments.length === 0) {
