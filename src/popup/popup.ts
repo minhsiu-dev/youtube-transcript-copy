@@ -2,18 +2,29 @@ import type { CaptionTrack, FormatChoice, VideoMeta, TabState } from '../lib/typ
 import type { Message } from '../lib/messages.js';
 
 const langSelect = document.getElementById('lang') as HTMLSelectElement;
-const status = document.getElementById('status') as HTMLDivElement;
+const statusEl = document.getElementById('status') as HTMLDivElement;
+const statusText = document.getElementById('status-text') as HTMLSpanElement;
+const statusSpinner = document.getElementById('status-spinner') as unknown as SVGElement;
 const btnPlain = document.getElementById('btn-plain') as HTMLButtonElement;
 const btnTimestamped = document.getElementById('btn-timestamped') as HTMLButtonElement;
 const btnHeader = document.getElementById('btn-header') as HTMLButtonElement;
 
 let activeTabId: number | null = null;
 
-function setStatus(text: string, kind: 'success' | 'error' | 'info' = 'info'): void {
-  status.textContent = text;
-  status.classList.remove('success', 'error');
-  if (kind === 'success') status.classList.add('success');
-  if (kind === 'error') status.classList.add('error');
+function setStatus(
+  text: string,
+  kind: 'success' | 'error' | 'info' | 'loading' = 'info',
+): void {
+  statusText.textContent = text;
+  statusEl.classList.remove('text-muted-foreground', 'text-success', 'text-destructive');
+  if (kind === 'success') statusEl.classList.add('text-success');
+  else if (kind === 'error') statusEl.classList.add('text-destructive');
+  else statusEl.classList.add('text-muted-foreground');
+
+  // Spinner is shown only for the 'loading' kind (e.g. 'Fetching…',
+  // 'Waiting for ad to end…'). Hidden on info (terminal messages),
+  // success, error, and empty status.
+  statusSpinner.classList.toggle('hidden', kind !== 'loading');
 }
 
 function setButtonsEnabled(enabled: boolean): void {
@@ -99,7 +110,7 @@ async function init(): Promise<void> {
 
 async function copyWithFormat(format: FormatChoice): Promise<void> {
   setButtonsEnabled(false);
-  setStatus('Fetching…', 'info');
+  setStatus('Fetching…', 'loading');
   if (activeTabId === null) {
     setStatus('No active tab.', 'error');
     setButtonsEnabled(true);
@@ -146,7 +157,7 @@ btnHeader.addEventListener('click', () => void copyWithFormat('header'));
 // window closes.
 chrome.runtime.onMessage.addListener((msg: Message) => {
   if (msg.type === 'STATUS_UPDATE') {
-    setStatus(msg.text, 'info');
+    setStatus(msg.text, 'loading');
   }
 });
 

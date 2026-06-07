@@ -107,6 +107,25 @@ Use this before tagging a release.
       is for the real video.
 - [ ] Open a video with no transcript while an ad is playing. Icon stays gray,
       popup shows "This video has no transcript." (unchanged from the no-ad case).
+- [ ] Load the unpacked extension while macOS / Windows is in **light mode**.
+      Open the popup on a YouTube video. Header shows the captions icon
+      followed by "Copy transcript" in small semibold type; language select
+      and three buttons are visible. Each format button has an icon
+      (Plain text → Type, With timestamps → Clock, Plain + title/URL →
+      FileText). Hover over each button: Plain text darkens, the other two
+      pick up an accent background. Tab through controls: focus ring is
+      visible on the select and each button.
+- [ ] Switch the OS to **dark mode** (without closing Chrome). Open a fresh
+      popup. Background is near-black, text is near-white, the icons are
+      legible against the dark background, and the focus ring is still
+      visible.
+- [ ] Click "Plain text" on a normal (no-ad) video. The status area shows a
+      spinning loader next to "Fetching…" briefly, then "Copied!" without a
+      spinner (success color), then the popup closes.
+- [ ] Open the popup during a pre-roll ad. When the status becomes
+      "Waiting for ad to end…", the spinner is visible the whole time.
+      After the ad ends, the spinner disappears with the "Copied!"
+      success message.
 
 ## Known limitations
 
