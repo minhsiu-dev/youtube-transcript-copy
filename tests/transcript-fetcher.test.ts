@@ -1,66 +1,117 @@
+/**
+ * @jest-environment jsdom
+ */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { parseJson3, fetchCaptionTrack } from '../src/content/transcript-fetcher.js';
+import {
+  parseTimedTextXml,
+  fetchCaptionTrack,
+  buildTranscriptUrl,
+} from '../src/content/transcript-fetcher.js';
+
+// jsdom's test env doesn't expose Node's Response global; build a minimal
+// stand-in that supports the methods fetchCaptionTrack actually calls.
+function mockResponse(
+  body: string,
+  init: { status?: number; statusText?: string } = {},
+): Response {
+  const status = init.status ?? 200;
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: init.statusText ?? 'OK',
+    text: async () => body,
+  } as unknown as Response;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURE = JSON.parse(
-  readFileSync(path.join(__dirname, 'fixtures/sample-json3.json'), 'utf8'),
+const FIXTURE_XML = readFileSync(
+  path.join(__dirname, 'fixtures/sample-timedtext.xml'),
+  'utf8',
 );
 
-describe('parseJson3', () => {
-  it('parses events into Segment[] with seconds-based timing', () => {
-    expect(parseJson3(FIXTURE)).toEqual([
-      { start: 0, duration: 3.5, text: 'Hello world.' },
-      { start: 3.5, duration: 4, text: 'This is a test.' },
-      { start: 65, duration: 2, text: 'After one minute.' },
+describe('parseTimedTextXml', () => {
+  it('parses <text> elements into Segments with seconds-based timing', () => {
+    expect(parseTimedTextXml(FIXTURE_XML)).toEqual([
+      { start: 0, duration: 2.8, text: 'Hi, thank you for watching the video.' },
+      {
+        start: 2.8,
+        duration: 6.4,
+        text: "So today I'm going to show you how to use YouTube Summary.",
+      },
+      {
+        start: 9.2,
+        duration: 4.48,
+        text: 'So once you install the extension, you are ready to use it.',
+      },
     ]);
   });
 
-  it('skips events missing segs entirely', () => {
-    const result = parseJson3({ events: [{ tStartMs: 0, dDurationMs: 1000 }] });
-    expect(result).toEqual([]);
+  it('returns empty array for empty transcript', () => {
+    expect(
+      parseTimedTextXml(
+        '<?xml version="1.0" encoding="utf-8" ?><transcript></transcript>',
+      ),
+    ).toEqual([]);
   });
 
-  it('defaults start and duration to 0 when timing fields are absent', () => {
-    const result = parseJson3({
-      events: [{ segs: [{ utf8: 'No timing' }] }],
-    });
-    expect(result).toEqual([{ start: 0, duration: 0, text: 'No timing' }]);
+  it('skips text nodes with empty content', () => {
+    const xml =
+      '<transcript><text start="0" dur="1"></text><text start="1" dur="1">Real.</text></transcript>';
+    expect(parseTimedTextXml(xml)).toEqual([
+      { start: 1, duration: 1, text: 'Real.' },
+    ]);
   });
 
-  it('skips events with only whitespace text', () => {
-    const result = parseJson3({
-      events: [
-        { tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: '   ' }] },
-        { tStartMs: 1000, dDurationMs: 1000, segs: [{ utf8: '\n\n' }] },
-      ],
-    });
-    expect(result).toEqual([]);
+  it('skips text nodes with only whitespace', () => {
+    const xml = '<transcript><text start="0" dur="1">   </text></transcript>';
+    expect(parseTimedTextXml(xml)).toEqual([]);
   });
 
-  it('returns empty array when events is missing', () => {
-    expect(parseJson3({})).toEqual([]);
+  it('defaults start and duration to 0 when attrs are absent', () => {
+    const xml = '<transcript><text>No attrs.</text></transcript>';
+    expect(parseTimedTextXml(xml)).toEqual([
+      { start: 0, duration: 0, text: 'No attrs.' },
+    ]);
   });
 
-  it('joins multiple segs in a single event', () => {
-    const result = parseJson3({
-      events: [{ tStartMs: 0, dDurationMs: 1000, segs: [{ utf8: 'A' }, { utf8: 'B' }, { utf8: 'C' }] }],
-    });
-    expect(result).toEqual([{ start: 0, duration: 1, text: 'ABC' }]);
+  it('decodes double-encoded HTML entities (&amp;#39; -> apostrophe)', () => {
+    const xml =
+      '<transcript><text start="0" dur="1">It&amp;#39;s working.</text></transcript>';
+    expect(parseTimedTextXml(xml)).toEqual([
+      { start: 0, duration: 1, text: "It's working." },
+    ]);
   });
 
-  it('handles segs that lack utf8 field', () => {
-    const result = parseJson3({
-      events: [
-        {
-          tStartMs: 0,
-          dDurationMs: 1000,
-          segs: [{ utf8: 'Real' }, { acAsrConf: 0 }, { utf8: ' text' }],
-        },
-      ],
-    });
-    expect(result).toEqual([{ start: 0, duration: 1, text: 'Real text' }]);
+  it('returns empty array on malformed XML', () => {
+    expect(parseTimedTextXml('<not valid xml')).toEqual([]);
+  });
+});
+
+describe('buildTranscriptUrl', () => {
+  it('strips fmt parameter when present', () => {
+    expect(
+      buildTranscriptUrl(
+        'https://www.youtube.com/api/timedtext?v=abc&fmt=json3&lang=en',
+      ),
+    ).toBe('https://www.youtube.com/api/timedtext?v=abc&lang=en');
+  });
+
+  it('leaves URLs without fmt unchanged', () => {
+    expect(
+      buildTranscriptUrl(
+        'https://www.youtube.com/api/timedtext?v=abc&lang=en',
+      ),
+    ).toBe('https://www.youtube.com/api/timedtext?v=abc&lang=en');
+  });
+
+  it('strips fmt at the end of the query string', () => {
+    expect(
+      buildTranscriptUrl(
+        'https://www.youtube.com/api/timedtext?v=abc&lang=en&fmt=srv3',
+      ),
+    ).toBe('https://www.youtube.com/api/timedtext?v=abc&lang=en');
   });
 });
 
@@ -71,61 +122,27 @@ describe('fetchCaptionTrack', () => {
     globalThis.fetch = realFetch;
   });
 
-  it('sets fmt=json3 when missing and returns parsed Segments', async () => {
+  it('fetches without fmt and parses XML response', async () => {
     let receivedUrl = '';
     globalThis.fetch = async (url) => {
       receivedUrl = url as string;
-      return new Response(JSON.stringify(FIXTURE), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return mockResponse(FIXTURE_XML);
     };
 
     const segments = await fetchCaptionTrack(
-      'https://www.youtube.com/api/timedtext?v=abc&lang=en',
-    );
-
-    expect(receivedUrl).toBe(
       'https://www.youtube.com/api/timedtext?v=abc&lang=en&fmt=json3',
     );
+
+    expect(receivedUrl).toBe(
+      'https://www.youtube.com/api/timedtext?v=abc&lang=en',
+    );
     expect(segments).toHaveLength(3);
-    expect(segments[0]?.text).toBe('Hello world.');
-  });
-
-  it('keeps fmt=json3 if already present (no duplicate parameter)', async () => {
-    let receivedUrl = '';
-    globalThis.fetch = async (url) => {
-      receivedUrl = url as string;
-      return new Response(JSON.stringify(FIXTURE));
-    };
-
-    await fetchCaptionTrack(
-      'https://www.youtube.com/api/timedtext?v=abc&fmt=json3',
-    );
-
-    expect(receivedUrl).toBe(
-      'https://www.youtube.com/api/timedtext?v=abc&fmt=json3',
-    );
-  });
-
-  it('replaces an existing non-json3 fmt parameter', async () => {
-    let receivedUrl = '';
-    globalThis.fetch = async (url) => {
-      receivedUrl = url as string;
-      return new Response(JSON.stringify(FIXTURE));
-    };
-
-    await fetchCaptionTrack(
-      'https://www.youtube.com/api/timedtext?v=abc&fmt=srv3&lang=en',
-    );
-
-    expect(receivedUrl).toBe(
-      'https://www.youtube.com/api/timedtext?v=abc&fmt=json3&lang=en',
-    );
+    expect(segments[0]?.text).toBe('Hi, thank you for watching the video.');
   });
 
   it('throws a descriptive error on HTTP failure', async () => {
     globalThis.fetch = async () =>
-      new Response('not found', { status: 404, statusText: 'Not Found' });
+      mockResponse('not found', { status: 404, statusText: 'Not Found' });
 
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
@@ -133,21 +150,19 @@ describe('fetchCaptionTrack', () => {
   });
 
   it('throws a clear error when the response body is empty', async () => {
-    globalThis.fetch = async () => new Response('');
+    globalThis.fetch = async () => mockResponse('');
 
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
     ).rejects.toThrow(/empty body/);
   });
 
-  it('throws a clear error when the response body is not JSON', async () => {
+  it('throws when the response has no parseable segments', async () => {
     globalThis.fetch = async () =>
-      new Response('<html><body>nope</body></html>', {
-        headers: { 'Content-Type': 'text/html' },
-      });
+      mockResponse('<html><body>no transcript here</body></html>');
 
     await expect(
       fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
-    ).rejects.toThrow(/not JSON/);
+    ).rejects.toThrow(/no parseable segments/);
   });
 });

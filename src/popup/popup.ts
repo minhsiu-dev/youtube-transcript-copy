@@ -38,9 +38,12 @@ interface GetTracksReply {
   state: TabState;
 }
 
-function pickDefaultIndex(tracks: CaptionTrack[]): number {
-  const firstNonAuto = tracks.findIndex((t) => !t.isAuto);
-  return firstNonAuto >= 0 ? firstNonAuto : 0;
+function pickDefaultIndex(_tracks: CaptionTrack[]): number {
+  // YouTube orders captionTracks with the video's primary/original-language
+  // track first. The earlier "prefer non-asr" rule was wrong: asr-kind tracks
+  // are the original audio language (auto-recognised), while non-asr tracks
+  // are often translations the user did not ask for.
+  return 0;
 }
 
 async function init(): Promise<void> {

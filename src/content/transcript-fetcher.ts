@@ -1,52 +1,49 @@
 import type { Segment } from '../lib/types.js';
 
-interface Json3Seg {
-  utf8?: string;
+export function buildTranscriptUrl(baseUrl: string): string {
+  // YouTube's default timedtext response is XML. The `fmt=json3` variant has
+  // been observed to return empty bodies for many videos, so we strip any
+  // existing `fmt` param and let YouTube serve XML.
+  try {
+    const u = new URL(baseUrl);
+    u.searchParams.delete('fmt');
+    return u.toString();
+  } catch {
+    return baseUrl.replace(/([?&])fmt=[^&]*&?/g, '$1').replace(/[?&]$/, '');
+  }
 }
 
-interface Json3Event {
-  tStartMs?: number;
-  dDurationMs?: number;
-  segs?: Json3Seg[];
-}
-
-interface Json3Payload {
-  events?: Json3Event[];
-}
-
-export function parseJson3(payload: unknown): Segment[] {
-  const events = (payload as Json3Payload | null)?.events;
-  if (!Array.isArray(events)) {
+export function parseTimedTextXml(xml: string): Segment[] {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) {
     return [];
   }
+  const textNodes = Array.from(doc.getElementsByTagName('text'));
   const out: Segment[] = [];
-  for (const ev of events) {
-    if (!Array.isArray(ev.segs)) continue;
-    const text = ev.segs
-      .map((s) => (typeof s.utf8 === 'string' ? s.utf8 : ''))
-      .join('');
+  for (const node of textNodes) {
+    const startAttr = node.getAttribute('start');
+    const durAttr = node.getAttribute('dur');
+    const start = startAttr === null ? 0 : parseFloat(startAttr);
+    const duration = durAttr === null ? 0 : parseFloat(durAttr);
+    const rawText = node.textContent ?? '';
+    const text = decodeHtmlEntities(rawText);
     if (text.trim() === '') continue;
-    out.push({
-      start: (ev.tStartMs ?? 0) / 1000,
-      duration: (ev.dDurationMs ?? 0) / 1000,
-      text,
-    });
+    out.push({ start, duration, text });
   }
   return out;
 }
 
-export function buildJson3Url(baseUrl: string): string {
-  try {
-    const u = new URL(baseUrl);
-    u.searchParams.set('fmt', 'json3');
-    return u.toString();
-  } catch {
-    return baseUrl.includes('fmt=json3') ? baseUrl : `${baseUrl}&fmt=json3`;
-  }
+// YouTube's transcript XML double-encodes apostrophes etc. — `&amp;#39;`
+// becomes `&#39;` after DOMParser's XML decode, and we still need the HTML
+// entity decode pass to recover `'`.
+function decodeHtmlEntities(text: string): string {
+  const ta = document.createElement('textarea');
+  ta.innerHTML = text;
+  return ta.value;
 }
 
 export async function fetchCaptionTrack(baseUrl: string): Promise<Segment[]> {
-  const url = buildJson3Url(baseUrl);
+  const url = buildTranscriptUrl(baseUrl);
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -59,14 +56,12 @@ export async function fetchCaptionTrack(baseUrl: string): Promise<Segment[]> {
       `Caption fetch returned empty body (status ${response.status}). The caption URL may have expired — reload the YouTube page and try again.`,
     );
   }
-  let payload: unknown;
-  try {
-    payload = JSON.parse(body);
-  } catch {
-    const preview = body.slice(0, 80).replace(/\s+/g, ' ');
+  const segments = parseTimedTextXml(body);
+  if (segments.length === 0) {
+    const preview = body.slice(0, 120).replace(/\s+/g, ' ');
     throw new Error(
-      `Caption response was not JSON. Got: ${preview}${body.length > 80 ? '…' : ''}`,
+      `Caption response had no parseable segments. Got: ${preview}${body.length > 120 ? '…' : ''}`,
     );
   }
-  return parseJson3(payload);
+  return segments;
 }
