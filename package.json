@@ -5,8 +5,10 @@
   "description": "Copy YouTube video transcripts to clipboard with one click.",
   "type": "module",
   "scripts": {
-    "build": "node esbuild.config.mjs",
-    "watch": "node esbuild.config.mjs --watch",
+    "build:css": "tailwindcss -i src/popup/popup.css -o dist/popup/popup.css --minify",
+    "build:js": "node esbuild.config.mjs",
+    "build": "npm run build:css && npm run build:js",
+    "watch": "concurrently -k -n css,js \"tailwindcss -i src/popup/popup.css -o dist/popup/popup.css --watch\" \"node esbuild.config.mjs --watch\"",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint 'src/**/*.ts' 'tests/**/*.ts'",

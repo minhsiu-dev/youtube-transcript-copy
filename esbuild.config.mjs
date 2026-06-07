@@ -25,7 +25,7 @@ async function copyStatic() {
   await mkdir('dist/popup', { recursive: true });
   await mkdir('dist/icons', { recursive: true });
   await copyFile('src/popup/popup.html', 'dist/popup/popup.html');
-  await copyFile('src/popup/popup.css', 'dist/popup/popup.css');
+  // popup.css is owned by Tailwind CLI (`npm run build:css`), not copied here.
   await copyFile('manifest.json', 'dist/manifest.json');
   await cp('src/icons', 'dist/icons', { recursive: true });
 }
