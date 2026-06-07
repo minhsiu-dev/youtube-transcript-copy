@@ -38,11 +38,13 @@ function sendState(state: TabState): void {
 }
 
 function isProbeMessage(data: unknown): data is ProbeMessage {
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as Record<string, unknown>;
   return (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as { tag?: unknown }).tag === PROBE_MESSAGE_TAG &&
-    (data as { type?: unknown }).type === 'PROBE_RESULT'
+    d['tag'] === PROBE_MESSAGE_TAG &&
+    d['type'] === 'PROBE_RESULT' &&
+    typeof d['result'] === 'object' &&
+    d['result'] !== null
   );
 }
 
@@ -81,11 +83,15 @@ function findTrack(languageCode: string): CaptionTrack | undefined {
 function applyFormat(
   choice: FormatChoice,
   segments: Awaited<ReturnType<typeof fetchCaptionTrack>>,
+  meta: VideoMeta | null,
 ): string {
   if (choice === 'plain') return formatPlain(segments);
   if (choice === 'timestamped') return formatTimestamped(segments);
-  if (cache.meta) return formatWithHeader(segments, cache.meta);
-  return formatPlain(segments);
+  // choice === 'header'
+  if (!meta) {
+    throw new Error('Header format requested but no video metadata available');
+  }
+  return formatWithHeader(segments, meta);
 }
 
 chrome.runtime.onMessage.addListener(
@@ -109,9 +115,10 @@ chrome.runtime.onMessage.addListener(
           });
           return;
         }
+        const metaSnapshot = cache.meta;
         try {
           const segments = await fetchCaptionTrack(track.baseUrl);
-          const text = applyFormat(msg.format, segments);
+          const text = applyFormat(msg.format, segments, metaSnapshot);
           sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
         } catch (err) {
           sendResponse({
