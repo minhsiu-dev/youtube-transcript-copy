@@ -227,12 +227,18 @@ chrome.runtime.onMessage.addListener(
             }
           }
 
+          // No ad, no pot, no cache: Step 1's ensurePot already failed and
+          // there's no ad to wait for. Surface the CC hint directly instead
+          // of calling ensurePot a second time (which would burn ~500ms on
+          // the CC-button active-trigger path before returning the same
+          // null).
+          if (!adAtStart && !initialPot) {
+            throw new EmptyTranscriptError();
+          }
+
           // Step 2: deterministic fallback. If an ad is still on screen,
           // wait for it to end (waitForAdToEnd resolves true when
           // #movie_player has been ad-free for >300ms, or false on timeout).
-          // Otherwise run the strict pot path directly — Step 1 already
-          // proved we have no pot, but ensurePot may have transient state
-          // we want to re-check before surfacing the CC hint.
           if (adAtStart) {
             pushStatus('Waiting for ad to end…');
             const ended = await waitForAdToEnd(60_000);
