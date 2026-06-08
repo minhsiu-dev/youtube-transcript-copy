@@ -154,7 +154,7 @@ describe('fetchCaptionTrack', () => {
     ).rejects.toThrow(/404/);
   });
 
-  it('throws HTTP error even when potParams is provided', async () => {
+  it('throws a descriptive error on HTTP 403', async () => {
     globalThis.fetch = async () =>
       mockResponse('forbidden', { status: 403, statusText: 'Forbidden' });
     await expect(
