@@ -72,7 +72,7 @@ async function init(): Promise<void> {
     // chrome.tabs.sendMessage rejects when the content-script isn't loaded
     // on this tab. Most often: extension was rebuilt but the tab wasn't
     // refreshed, or the content-script crashed at startup.
-    console.error('[yt-transcript-copier] GET_TRACKS failed:', err);
+    console.error('[yt-transcript-copy] GET_TRACKS failed:', err);
     setStatus(
       'Extension can\'t reach this page. Reload the YouTube tab and try again.',
       'error',
@@ -81,7 +81,7 @@ async function init(): Promise<void> {
   }
 
   if (!reply) {
-    console.error('[yt-transcript-copier] GET_TRACKS returned no reply');
+    console.error('[yt-transcript-copy] GET_TRACKS returned no reply');
     setStatus('No response from page. Reload the YouTube tab.', 'error');
     return;
   }
