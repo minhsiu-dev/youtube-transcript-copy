@@ -16,7 +16,6 @@ import {
 } from '../lib/formatters.js';
 import { ensurePot, scanAnyPot } from './pot-cache.js';
 import {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   getCachedTranscript,
   setCachedTranscript,
 } from './transcript-cache.js';
@@ -177,6 +176,21 @@ chrome.runtime.onMessage.addListener(
           return;
         }
         const metaSnapshot = cache.meta;
+
+        // Cache short-circuit. Stored value is raw segments keyed by
+        // (videoId, languageCode), so a format switch
+        // (plain ↔ timestamped ↔ header) still hits cache.
+        if (metaSnapshot) {
+          const cached = getCachedTranscript(
+            metaSnapshot.videoId,
+            msg.languageCode,
+          );
+          if (cached) {
+            const text = applyFormat(msg.format, cached, metaSnapshot);
+            sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
+            return;
+          }
+        }
 
         try {
           // Step 1: speculative fast path during an ad, normal path otherwise.
