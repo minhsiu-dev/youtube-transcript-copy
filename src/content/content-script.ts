@@ -15,6 +15,10 @@ import {
   formatWithHeader,
 } from '../lib/formatters.js';
 import { ensurePot, scanAnyPot } from './pot-cache.js';
+import {
+  getCachedTranscript,
+  setCachedTranscript,
+} from './transcript-cache.js';
 import { isAdPlaying, waitForAdToEnd } from './ad-state.js';
 
 interface CachedPageData {
@@ -173,51 +177,96 @@ chrome.runtime.onMessage.addListener(
         }
         const metaSnapshot = cache.meta;
 
-        try {
-          // Step 1: speculative fast path during an ad, normal path otherwise.
-          // During an ad, ensurePot's CC click would just trigger captions
-          // for the ad's videoId and the strict scan would reject them, so
-          // we use the relaxed scanAnyPot instead. It may or may not work;
-          // if the server returns an empty body we fall through to Step 2.
-          const adAtStart = isAdPlaying();
-          const initialPot = adAtStart
-            ? (scanAnyPot() ?? undefined)
-            : metaSnapshot
-              ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
-              : undefined;
-
-          try {
-            const segments = await fetchCaptionTrack(track.baseUrl, initialPot);
-            const text = applyFormat(msg.format, segments, metaSnapshot);
+        // Cache short-circuit. Stored value is raw segments keyed by
+        // (videoId, languageCode), so a format switch
+        // (plain ↔ timestamped ↔ header) still hits cache.
+        if (metaSnapshot) {
+          const cached = getCachedTranscript(
+            metaSnapshot.videoId,
+            msg.languageCode,
+          );
+          if (cached) {
+            const text = applyFormat(msg.format, cached, metaSnapshot);
             sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
             return;
-          } catch (err) {
-            // Only fall back when the error is specifically an empty body
-            // AND there's still an ad on screen. Other errors (HTTP, parse)
-            // bubble out unchanged.
-            if (!(err instanceof EmptyTranscriptError) || !isAdPlaying()) {
-              throw err;
+          }
+        }
+
+        try {
+          // Step 1: speculative fast path during an ad, normal path otherwise.
+          // We only attempt a fetch when we have a pot — fetches without pot
+          // never succeed in practice, so there's no point trying. If no pot
+          // is available at Step 1, fall through to Step 2.
+          const adAtStart = isAdPlaying();
+          const initialPot = adAtStart
+            ? scanAnyPot()
+            : metaSnapshot
+              ? await ensurePot(metaSnapshot.videoId)
+              : null;
+
+          if (initialPot) {
+            try {
+              const segments = await fetchCaptionTrack(track.baseUrl, initialPot);
+              if (metaSnapshot) {
+                setCachedTranscript(
+                  metaSnapshot.videoId,
+                  msg.languageCode,
+                  segments,
+                );
+              }
+              const text = applyFormat(msg.format, segments, metaSnapshot);
+              sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
+              return;
+            } catch (err) {
+              // Only fall back when the error is specifically an empty body
+              // AND there's still an ad on screen. Other errors (HTTP, parse)
+              // bubble out unchanged.
+              if (!(err instanceof EmptyTranscriptError) || !isAdPlaying()) {
+                throw err;
+              }
             }
           }
 
-          // Step 2: deterministic fallback — wait for the ad to end, then
-          // run the normal strict pot path. waitForAdToEnd resolves true
-          // when #movie_player has been ad-free for >300ms, or false on
-          // timeout.
-          pushStatus('Waiting for ad to end…');
-          const ended = await waitForAdToEnd(60_000);
-          if (!ended) {
-            sendResponse({
-              type: 'ERROR',
-              reason: 'Ad is taking too long — try again after it ends.',
-            });
-            return;
+          // No ad, no pot, no cache: Step 1's ensurePot already failed and
+          // there's no ad to wait for. Surface the CC hint directly instead
+          // of calling ensurePot a second time (which would burn ~500ms on
+          // the CC-button active-trigger path before returning the same
+          // null).
+          if (!adAtStart && !initialPot) {
+            throw new EmptyTranscriptError();
+          }
+
+          // Step 2: deterministic fallback. If an ad is still on screen,
+          // wait for it to end (waitForAdToEnd resolves true when
+          // #movie_player has been ad-free for >300ms, or false on timeout).
+          if (adAtStart) {
+            pushStatus('Waiting for ad to end…');
+            const ended = await waitForAdToEnd(60_000);
+            if (!ended) {
+              sendResponse({
+                type: 'ERROR',
+                reason: 'Ad is taking too long — try again after it ends.',
+              });
+              return;
+            }
           }
 
           const realPot = metaSnapshot
-            ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
-            : undefined;
+            ? await ensurePot(metaSnapshot.videoId)
+            : null;
+          if (!realPot) {
+            // No pot available — surface the existing CC-hint via the
+            // EmptyTranscriptError branch in the outer catch.
+            throw new EmptyTranscriptError();
+          }
           const segments = await fetchCaptionTrack(track.baseUrl, realPot);
+          if (metaSnapshot) {
+            setCachedTranscript(
+              metaSnapshot.videoId,
+              msg.languageCode,
+              segments,
+            );
+          }
           const text = applyFormat(msg.format, segments, metaSnapshot);
           sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
         } catch (err) {
