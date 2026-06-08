@@ -15,6 +15,11 @@ import {
   formatWithHeader,
 } from '../lib/formatters.js';
 import { ensurePot, scanAnyPot } from './pot-cache.js';
+import {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  getCachedTranscript,
+  setCachedTranscript,
+} from './transcript-cache.js';
 import { isAdPlaying, waitForAdToEnd } from './ad-state.js';
 
 interface CachedPageData {
@@ -175,28 +180,36 @@ chrome.runtime.onMessage.addListener(
 
         try {
           // Step 1: speculative fast path during an ad, normal path otherwise.
-          // During an ad, ensurePot's CC click would just trigger captions
-          // for the ad's videoId and the strict scan would reject them, so
-          // we use the relaxed scanAnyPot instead. It may or may not work;
-          // if the server returns an empty body we fall through to Step 2.
+          // We only attempt a fetch when we have a pot — fetches without pot
+          // never succeed in practice, so there's no point trying. If no pot
+          // is available at Step 1, fall through to Step 2.
           const adAtStart = isAdPlaying();
           const initialPot = adAtStart
-            ? (scanAnyPot() ?? undefined)
+            ? scanAnyPot()
             : metaSnapshot
-              ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
-              : undefined;
+              ? await ensurePot(metaSnapshot.videoId)
+              : null;
 
-          try {
-            const segments = await fetchCaptionTrack(track.baseUrl, initialPot);
-            const text = applyFormat(msg.format, segments, metaSnapshot);
-            sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
-            return;
-          } catch (err) {
-            // Only fall back when the error is specifically an empty body
-            // AND there's still an ad on screen. Other errors (HTTP, parse)
-            // bubble out unchanged.
-            if (!(err instanceof EmptyTranscriptError) || !isAdPlaying()) {
-              throw err;
+          if (initialPot) {
+            try {
+              const segments = await fetchCaptionTrack(track.baseUrl, initialPot);
+              if (metaSnapshot) {
+                setCachedTranscript(
+                  metaSnapshot.videoId,
+                  msg.languageCode,
+                  segments,
+                );
+              }
+              const text = applyFormat(msg.format, segments, metaSnapshot);
+              sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
+              return;
+            } catch (err) {
+              // Only fall back when the error is specifically an empty body
+              // AND there's still an ad on screen. Other errors (HTTP, parse)
+              // bubble out unchanged.
+              if (!(err instanceof EmptyTranscriptError) || !isAdPlaying()) {
+                throw err;
+              }
             }
           }
 
@@ -215,9 +228,21 @@ chrome.runtime.onMessage.addListener(
           }
 
           const realPot = metaSnapshot
-            ? (await ensurePot(metaSnapshot.videoId)) ?? undefined
-            : undefined;
+            ? await ensurePot(metaSnapshot.videoId)
+            : null;
+          if (!realPot) {
+            // No pot available — surface the existing CC-hint via the
+            // EmptyTranscriptError branch in the outer catch.
+            throw new EmptyTranscriptError();
+          }
           const segments = await fetchCaptionTrack(track.baseUrl, realPot);
+          if (metaSnapshot) {
+            setCachedTranscript(
+              metaSnapshot.videoId,
+              msg.languageCode,
+              segments,
+            );
+          }
           const text = applyFormat(msg.format, segments, metaSnapshot);
           sendResponse({ type: 'FETCH_AND_FORMAT_REPLY', text });
         } catch (err) {
