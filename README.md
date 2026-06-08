@@ -1,4 +1,4 @@
-# YT Transcript Copier
+# YT Transcript Copy
 
 A Chrome extension (Manifest V3) that copies the transcript of the YouTube
 video you're currently watching to your clipboard.

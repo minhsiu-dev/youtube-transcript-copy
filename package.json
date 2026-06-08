@@ -1,5 +1,5 @@
 {
-  "name": "yt-transcript-copier",
+  "name": "yt-transcript-copy",
   "version": "0.1.0",
   "private": true,
   "description": "Copy YouTube video transcripts to clipboard with one click.",
