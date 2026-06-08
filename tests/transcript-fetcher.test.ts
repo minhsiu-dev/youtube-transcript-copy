@@ -177,7 +177,7 @@ describe('fetchCaptionTrack', () => {
     ).rejects.toThrow(/no parseable segments/);
   });
 
-  it('appends pot and c when potParams is provided', async () => {
+  it('appends pot and c params to the request URL', async () => {
     let receivedUrl = '';
     globalThis.fetch = async (url) => {
       receivedUrl = url as string;
