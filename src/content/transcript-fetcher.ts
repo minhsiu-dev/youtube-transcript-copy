@@ -56,15 +56,13 @@ export interface PotParams {
 
 export async function fetchCaptionTrack(
   baseUrl: string,
-  potParams?: PotParams,
+  potParams: PotParams,
 ): Promise<Segment[]> {
-  let url = buildTranscriptUrl(baseUrl);
-  if (potParams) {
-    const u = new URL(url);
-    u.searchParams.set('pot', potParams.pot);
-    u.searchParams.set('c', potParams.c);
-    url = u.toString();
-  }
+  const base = buildTranscriptUrl(baseUrl);
+  const u = new URL(base);
+  u.searchParams.set('pot', potParams.pot);
+  u.searchParams.set('c', potParams.c);
+  const url = u.toString();
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -73,14 +71,8 @@ export async function fetchCaptionTrack(
   }
   const body = await response.text();
   if (body.trim() === '') {
-    if (potParams) {
-      // pot likely rejected — try once without it; some older / ASR-only
-      // tracks serve without pot.
-      return fetchCaptionTrack(baseUrl);
-    }
     // The user-facing "enable CC" message is constructed by the caller
-    // (content-script), which can branch on ad-playing state and choose
-    // an appropriate message. Throw a typed sentinel so the caller can
+    // (content-script). Throw a typed sentinel so the caller can
     // distinguish empty-body from HTTP errors and parse failures.
     throw new EmptyTranscriptError();
   }

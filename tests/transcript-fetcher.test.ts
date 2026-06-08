@@ -132,11 +132,12 @@ describe('fetchCaptionTrack', () => {
 
     const segments = await fetchCaptionTrack(
       'https://www.youtube.com/api/timedtext?v=abc&lang=en&fmt=json3',
+      { pot: 'POT_VALUE', c: 'WEB' },
     );
 
-    expect(receivedUrl).toBe(
-      'https://www.youtube.com/api/timedtext?v=abc&lang=en',
-    );
+    const u = new URL(receivedUrl);
+    expect(u.searchParams.get('lang')).toBe('en');
+    expect(u.searchParams.get('fmt')).toBeNull();
     expect(segments).toHaveLength(3);
     expect(segments[0]?.text).toBe('Hi, thank you for watching the video.');
   });
@@ -146,16 +147,11 @@ describe('fetchCaptionTrack', () => {
       mockResponse('not found', { status: 404, statusText: 'Not Found' });
 
     await expect(
-      fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
+      fetchCaptionTrack(
+        'https://www.youtube.com/api/timedtext?v=abc',
+        { pot: 'POT_VALUE', c: 'WEB' },
+      ),
     ).rejects.toThrow(/404/);
-  });
-
-  it('throws EmptyTranscriptError when the response body is empty (no pot)', async () => {
-    globalThis.fetch = async () => mockResponse('');
-
-    await expect(
-      fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
-    ).rejects.toBeInstanceOf(EmptyTranscriptError);
   });
 
   it('throws HTTP error even when potParams is provided', async () => {
@@ -174,7 +170,10 @@ describe('fetchCaptionTrack', () => {
       mockResponse('<html><body>no transcript here</body></html>');
 
     await expect(
-      fetchCaptionTrack('https://www.youtube.com/api/timedtext?v=abc'),
+      fetchCaptionTrack(
+        'https://www.youtube.com/api/timedtext?v=abc',
+        { pot: 'POT_VALUE', c: 'WEB' },
+      ),
     ).rejects.toThrow(/no parseable segments/);
   });
 
@@ -196,29 +195,12 @@ describe('fetchCaptionTrack', () => {
     expect(u.searchParams.get('fmt')).toBeNull();
   });
 
-  it('retries without pot when a pot-supplied fetch returns empty', async () => {
-    const urls: string[] = [];
+  it('throws EmptyTranscriptError on empty body (single fetch attempt)', async () => {
     let callCount = 0;
-    globalThis.fetch = async (url) => {
-      urls.push(url as string);
+    globalThis.fetch = async () => {
       callCount++;
-      if (callCount === 1) return mockResponse('');
-      return mockResponse(FIXTURE_XML);
+      return mockResponse('');
     };
-
-    const segments = await fetchCaptionTrack(
-      'https://www.youtube.com/api/timedtext?v=abc&lang=en',
-      { pot: 'POT_VALUE', c: 'WEB' },
-    );
-
-    expect(callCount).toBe(2);
-    expect(new URL(urls[0]!).searchParams.get('pot')).toBe('POT_VALUE');
-    expect(new URL(urls[1]!).searchParams.get('pot')).toBeNull();
-    expect(segments).toHaveLength(3);
-  });
-
-  it('throws EmptyTranscriptError when both pot and no-pot attempts return empty', async () => {
-    globalThis.fetch = async () => mockResponse('');
 
     await expect(
       fetchCaptionTrack(
@@ -226,5 +208,6 @@ describe('fetchCaptionTrack', () => {
         { pot: 'POT_VALUE', c: 'WEB' },
       ),
     ).rejects.toBeInstanceOf(EmptyTranscriptError);
+    expect(callCount).toBe(1);
   });
 });
