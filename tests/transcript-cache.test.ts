@@ -1,3 +1,4 @@
+/** @jest-environment node */
 import { beforeEach, describe, it, expect } from '@jest/globals';
 import {
   getCachedTranscript,

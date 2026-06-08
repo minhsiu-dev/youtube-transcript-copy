@@ -9,5 +9,6 @@ module.exports = {
   collectCoverageFrom: [
     'src/lib/**/*.ts',
     'src/content/transcript-fetcher.ts',
+    'src/content/transcript-cache.ts',
   ],
 };
