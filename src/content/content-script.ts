@@ -213,18 +213,22 @@ chrome.runtime.onMessage.addListener(
             }
           }
 
-          // Step 2: deterministic fallback — wait for the ad to end, then
-          // run the normal strict pot path. waitForAdToEnd resolves true
-          // when #movie_player has been ad-free for >300ms, or false on
-          // timeout.
-          pushStatus('Waiting for ad to end…');
-          const ended = await waitForAdToEnd(60_000);
-          if (!ended) {
-            sendResponse({
-              type: 'ERROR',
-              reason: 'Ad is taking too long — try again after it ends.',
-            });
-            return;
+          // Step 2: deterministic fallback. If an ad is still on screen,
+          // wait for it to end (waitForAdToEnd resolves true when
+          // #movie_player has been ad-free for >300ms, or false on timeout).
+          // Otherwise run the strict pot path directly — Step 1 already
+          // proved we have no pot, but ensurePot may have transient state
+          // we want to re-check before surfacing the CC hint.
+          if (adAtStart) {
+            pushStatus('Waiting for ad to end…');
+            const ended = await waitForAdToEnd(60_000);
+            if (!ended) {
+              sendResponse({
+                type: 'ERROR',
+                reason: 'Ad is taking too long — try again after it ends.',
+              });
+              return;
+            }
           }
 
           const realPot = metaSnapshot
